@@ -1,8 +1,10 @@
 import time
 from collections import deque
 import math
+import heapq
+import csv
 
-# Placeholder for city information and adjacencies
+# City information and adjacencies
 cities_info = {}  # Key: city name, Value: (latitude, longitude)
 city_adjacencies = {}  # Key: city name, Value: list of adjacent cities
 
@@ -10,20 +12,25 @@ def load_data():
     global cities_info, city_adjacencies
 
     # Load cities information
-    cities_info = {
-        'City A': (37.7749, -122.4194),  # San Francisco
-        'City B': (40.7128, -74.0059),  # New York City
-        'City C': (34.0522, -118.2437),  # Los Angeles
-        # Add more cities as needed
-    }
+    with open('coordinates.csv', 'r') as file:
+        reader = csv.reader(file)
+        for row in reader:
+            city, lat, lon = row[0], float(row[1]), float(row[2])
+            cities_info[city] = (lat, lon)
 
     # Load city adjacencies ensuring bidirectionality
-    city_adjacencies = {
-        'City A': ['City B', 'City C'],
-        'City B': ['City A', 'City C'],
-        'City C': ['City A', 'City B'],
-        # Add more adjacencies as needed
-    }
+    with open('Adjacencies.txt', 'r') as file:
+        for line in file:
+            cities = line.strip().split()
+            for i in range(len(cities) - 1):
+                city1 = cities[i]
+                city2 = cities[i + 1]
+                if city1 not in city_adjacencies:
+                    city_adjacencies[city1] = []
+                if city2 not in city_adjacencies:
+                    city_adjacencies[city2] = []
+                city_adjacencies[city1].append(city2)
+                city_adjacencies[city2].append(city1)
 
 def haversine(lat1, lon1, lat2, lon2):
     # Calculate the great circle distance between two points
