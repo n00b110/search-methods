@@ -1,90 +1,229 @@
-import csv
 import time
-from queue import Queue
+from collections import deque
+import math
 
-# Read the coordinates from the CSV file
-def read_coordinates(file_path):
-    with open(file_path, newline='') as csvfile:
-        reader = csv.reader(csvfile)
-        coordinates = {rows[0]: (float(rows[1]), float(rows[2])) for rows in reader}
-    return coordinates
+# Placeholder for city information and adjacencies
+cities_info = {}  # Key: city name, Value: (latitude, longitude)
+city_adjacencies = {}  # Key: city name, Value: list of adjacent cities
 
-# Read the adjacencies from the TXT file
-def read_adjacencies(file_path):
-    with open(file_path, 'r') as file:
-        adjacencies = {}
-        for line in file:
-            cities = line.strip().split(' ')
-            if cities[0] not in adjacencies:
-                adjacencies[cities[0]] = []
-            adjacencies[cities[0]].append(cities[1])
-            # Since adjacency is symmetric, add the reverse as well
-            if cities[1] not in adjacencies:
-                adjacencies[cities[1]] = []
-            adjacencies[cities[1]].append(cities[0])
-    return adjacencies
+def load_data():
+    global cities_info, city_adjacencies
 
-# Calculate the distance between two coordinates (simplified, not accounting for earth's curvature)
-def calculate_distance(coord1, coord2):
-    return ((coord1[0] - coord2[0])**2 + (coord1[1] - coord2[1])**2)**0.5
-
-# Perform BFS to find the shortest path from start to end
-def bfs(adjacencies, start, end):
-    visited = {city: False for city in adjacencies}
-    previous = {city: None for city in adjacencies}
-    queue = Queue()
-    queue.put(start)
-    visited[start] = True
-    while not queue.empty():
-        current_city = queue.get()
-        if current_city == end:
-            break
-        for neighbor in adjacencies[current_city]:
-            if not visited[neighbor]:
-                queue.put(neighbor)
-                visited[neighbor] = True
-                previous[neighbor] = current_city
-    # Reconstruct the path from end to start
-    path = []
-    while end is not None:
-        path.insert(0, end)
-        end = previous[end]
-    return path
-
-# Given a path of cities, calculate the total distance
-def path_distance(path, coordinates):
-    total_distance = 0
-    for i in range(len(path) - 1):
-        total_distance += calculate_distance(coordinates[path[i]], coordinates[path[i + 1]])
-    return total_distance
-
-# Main program function
-def find_route(start_city, end_city, coordinates_file, adjacencies_file):
-    coordinates = read_coordinates(coordinates_file)
-    adjacencies = read_adjacencies(adjacencies_file)
-    if start_city not in coordinates or end_city not in coordinates:
-        return "Start or end city not in database."
-    
-    start_time = time.time()
-    path = bfs(adjacencies, start_city, end_city)
-    end_time = time.time()
-    
-    if len(path) <= 1:  # If the path contains only the start city or is empty, no route was found
-        return "No route found."
-    
-    total_distance = path_distance(path, coordinates)
-    elapsed_time = end_time - start_time
-    
-    return {
-        "route": path,
-        "total_distance": total_distance,
-        "time_taken": elapsed_time
+    # Load cities information
+    cities_info = {
+        'City A': (37.7749, -122.4194),  # San Francisco
+        'City B': (40.7128, -74.0059),  # New York City
+        'City C': (34.0522, -118.2437),  # Los Angeles
+        # Add more cities as needed
     }
 
-# Replace 'coordinates.csv' and 'Adjacencies.txt' with the actual file paths
-coordinates_file_path = 'coordinates.csv'
-adjacencies_file_path = 'Adjacencies.txt'
+    # Load city adjacencies ensuring bidirectionality
+    city_adjacencies = {
+        'City A': ['City B', 'City C'],
+        'City B': ['City A', 'City C'],
+        'City C': ['City A', 'City B'],
+        # Add more adjacencies as needed
+    }
 
-# Example use-case (replace 'Anthony' and 'Wichita' with user inputs)
-result = find_route('Anthony', 'Wichita', coordinates_file_path, adjacencies_file_path)
-print(result)
+def haversine(lat1, lon1, lat2, lon2):
+    # Calculate the great circle distance between two points
+    # on the earth (specified in decimal degrees)
+    # Returns distance in kilometers
+    R = 6371  # Radius of the Earth in kilometers
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+
+    a = math.sin(delta_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
+
+def user_input():
+    # Collect user input for start and end cities and validate against the cities_info
+    cities = list(cities_info.keys())
+    print(cities)
+    while True:
+        start_city = input("Enter the start city: ").strip()
+        if start_city in cities:
+            break
+        else:
+            print("Invalid city name. Please try again.")
+
+    while True:
+        end_city = input("Enter the end city: ").strip()
+        if end_city in cities:
+            break
+        else:
+            print("Invalid city name. Please try again.")
+
+    # Ask for the search method
+    search_method = input("Enter the search method (BFS, DFS, ID-DFS, Best-First, A*): ").strip().upper()
+
+    # Returns start_city, end_city, search_method
+    return start_city, end_city, search_method
+
+def bfs(start, goal):
+    # Implement Breadth-First Search
+    start_time = time.time()
+    queue = deque([(start, [start])])
+    visited = set()
+
+    while queue:
+        node, path = queue.popleft()
+        if node == goal:
+            return path, time.time() - start_time, calculate_route_distance(path)
+
+        if node not in visited:
+            visited.add(node)
+            for neighbor in city_adjacencies[node]:
+                new_path = path + [neighbor]
+                queue.append((neighbor, new_path))
+
+    return None, time.time() - start_time, 0
+
+def dfs(start, goal):
+    # Implement Depth-First Search
+    start_time = time.time()
+    stack = [(start, [start])]
+    visited = set()
+
+    while stack:
+        node, path = stack.pop()
+        if node == goal:
+            return path, time.time() - start_time, calculate_route_distance(path)
+
+        if node not in visited:
+            visited.add(node)
+            for neighbor in city_adjacencies[node]:
+                new_path = path + [neighbor]
+                stack.append((neighbor, new_path))
+
+    return None, time.time() - start_time, 0
+
+def id_dfs(start, goal):
+    # Implement Iterative Deepening Depth-First Search
+    start_time = time.time()
+    for depth in range(len(city_adjacencies)):
+        result, time_taken, distance = id_dfs_limited(start, goal, depth)
+        if result is not None:
+            return result, time_taken, distance
+
+    return None, time.time() - start_time, 0
+
+def id_dfs_limited(start, goal, depth):
+    if depth == 0:
+        if start == goal:
+            return [start], 0, 0
+        return None, 0, 0
+
+    visited = set()
+    stack = [(start, [start])]
+
+    while stack:
+        node, path = stack.pop()
+        if node == goal:
+            return path, 0, calculate_route_distance(path)
+
+        if node not in visited:
+            visited.add(node)
+            for neighbor in city_adjacencies[node]:
+                new_path = path + [neighbor]
+                if len(new_path) <= depth + 1:
+                    stack.append((neighbor, new_path))
+
+    return None, 0, 0
+
+def best_first_search(start, goal):
+    # Implement Best-First Search using a heuristic
+    start_time = time.time()
+    queue = [(haversine(cities_info[start][0], cities_info[start][1],
+                        cities_info[goal][0], cities_info[goal][1]),
+              start, [start])]
+    visited = set()
+
+    while queue:
+        _, node, path = heapq.heappop(queue)
+        if node == goal:
+            return path, time.time() - start_time, calculate_route_distance(path)
+
+        if node not in visited:
+            visited.add(node)
+            for neighbor in city_adjacencies[node]:
+                new_path = path + [neighbor]
+                heuristic = haversine(cities_info[neighbor][0], cities_info[neighbor][1],
+                                      cities_info[goal][0], cities_info[goal][1])
+                heapq.heappush(queue, (heuristic, neighbor, new_path))
+
+    return None, time.time() - start_time, 0
+
+def a_star_search(start, goal):
+    # Implement A* Search
+    start_time = time.time()
+    queue = [(0, start, [start])]
+    visited = set()
+
+    while queue:
+        cost, node, path = heapq.heappop(queue)
+        if node == goal:
+            return path, time.time() - start_time, calculate_route_distance(path)
+
+        if node not in visited:
+            visited.add(node)
+            for neighbor in city_adjacencies[node]:
+                new_path = path + [neighbor]
+                new_cost = cost + haversine(cities_info[node][0], cities_info[node][1],
+                                            cities_info[neighbor][0], cities_info[neighbor][1])
+                heuristic = haversine(cities_info[neighbor][0], cities_info[neighbor][1],
+                                      cities_info[goal][0], cities_info[goal][1])
+                heapq.heappush(queue, (new_cost + heuristic, neighbor, new_path))
+
+    return None, time.time() - start_time, 0
+
+def calculate_route_distance(route):
+    # Calculate the total distance of the route
+    # Use haversine function for distance calculation between cities
+    total_distance = 0
+    for i in range(len(route) - 1):
+        start_city = route[i]
+        end_city = route[i + 1]
+        start_lat, start_lon = cities_info[start_city]
+        end_lat, end_lon = cities_info[end_city]
+        total_distance += haversine(start_lat, start_lon, end_lat, end_lon)
+
+    return total_distance
+
+def main():
+    load_data()
+
+    while True:
+        start_city, end_city, method = user_input()
+
+        if method == 'BFS':
+            route, time_taken, total_distance = bfs(start_city, end_city)
+        elif method == 'DFS':
+            route, time_taken, total_distance = dfs(start_city, end_city)
+        elif method == 'ID-DFS':
+            route, time_taken, total_distance = id_dfs(start_city, end_city)
+        elif method == 'BEST-FIRST':
+            route, time_taken, total_distance = best_first_search(start_city, end_city)
+        elif method == 'A*':
+            route, time_taken, total_distance = a_star_search(start_city, end_city)
+        else:
+            print("Invalid search method. Please try again.")
+            continue
+
+        if route:
+            print(f"Route: {' -> '.join(route)}")
+            print(f"Time Taken: {time_taken:.6f} seconds")
+            print(f"Total Distance: {total_distance:.2f} km")
+        else:
+            print("No route found.")
+
+        # Ask if user wants to try another search method
+        another_search = input("Do you want to try another search? (y/n) ").strip().lower()
+        if another_search != 'y':
+            break
+
+if __name__ == "__main__":
+    main()
